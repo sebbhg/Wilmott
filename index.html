@@ -72,7 +72,35 @@ p.lead{font-size:20px;color:var(--ink)}
   text-transform:uppercase;color:var(--amber);
 }
 .exp-bar .fig{font-family:'Fraunces',serif;font-style:italic;font-size:15px;color:var(--ink-dim)}
-.controls{display:flex;gap:10px;flex-wrap:wrap;padding:18px 24px 0}
+
+.params{
+  display:flex;gap:22px;flex-wrap:wrap;align-items:flex-end;
+  padding:18px 24px 0;
+}
+.param{display:flex;flex-direction:column;gap:6px}
+.param label{
+  font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--ink-dim);
+}
+.param input[type=number]{
+  font-family:'IBM Plex Mono',monospace;font-size:14px;color:var(--ink);
+  background:transparent;border:1px solid var(--rule);border-radius:6px;
+  padding:9px 12px;width:110px;
+}
+.param input[type=number]:focus{outline:none;border-color:var(--amber)}
+.param input:disabled{opacity:.4}
+.seg{
+  display:flex;border:1px solid var(--rule);border-radius:6px;overflow:hidden;
+}
+.seg button{
+  font-family:'IBM Plex Mono',monospace;font-size:12.5px;padding:9px 14px;
+  background:transparent;border:none;color:var(--ink-dim);cursor:pointer;
+  transition:all .15s ease;border-radius:0;
+}
+.seg button.active{background:var(--amber);color:#0e1420;font-weight:500}
+.seg button:not(.active):hover{color:var(--amber)}
+
+.controls{display:flex;gap:10px;flex-wrap:wrap;padding:16px 24px 0}
 button{
   font-family:'IBM Plex Mono',monospace;font-size:13px;letter-spacing:.05em;
   padding:10px 18px;border-radius:6px;cursor:pointer;
@@ -86,7 +114,7 @@ button.primary:hover{background:#f2c25a;color:#0e1420}
 button:disabled{opacity:.45;cursor:default}
 .chart-zone{padding:10px 24px 6px}
 svg{display:block;width:100%;height:auto}
-.tosses{display:flex;gap:10px;padding:6px 24px 4px;align-items:center;flex-wrap:wrap;min-height:56px}
+.tosses{display:flex;gap:10px;padding:6px 24px 4px;align-items:center;flex-wrap:wrap;min-height:34px}
 .coin{
   width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;
   font-family:'Fraunces',serif;font-weight:700;font-size:17px;border:1.5px solid;
@@ -123,117 +151,203 @@ svg{display:block;width:100%;height:auto}
 </div>
 
 <section>
-  <p class="lead">Toss a fair coin six times in a row. If it lands <strong>heads</strong>, you win <span class="math">+$1</span>; if it lands <strong>tails</strong>, you lose <span class="math">−$1</span>. We plot the cumulative winnings <span class="math">S<sub>i</sub></span> after each toss — a random walk, the most elementary of all stochastic processes.</p>
+  <p class="lead">Toss a fair coin <span class="math">n</span> times over a total time horizon <span class="math">T</span>. Heads you win, tails you lose. In the basic game the stake is <span class="math">±$1</span> per toss; in the refined game it is <span class="math">±√(T/n)</span>, so that the variance of the final winnings stays equal to <span class="math">T</span> no matter how many steps you take. As <span class="math">n → ∞</span>, the path of <span class="math">S<sub>i</sub></span> approaches Brownian motion.</p>
 </section>
 
 <div class="experiment">
   <div class="exp-bar">
-    <span class="label">Experiment 1.1 — Six tosses</span>
+    <span class="label">Experiment 1.1 — The coin-tossing experiment</span>
     <span class="fig">Fig. 1.1 — path of S<sub>i</sub></span>
   </div>
+
+  <div class="params">
+    <div class="param">
+      <label for="inN">Number of tosses n</label>
+      <input id="inN" type="number" min="1" max="5000" step="1" value="6">
+    </div>
+    <div class="param">
+      <label>Stake per toss</label>
+      <div class="seg">
+        <button id="modeUnit" class="active" type="button">±$1</button>
+        <button id="modeSqrt" type="button">±√(T/n)</button>
+      </div>
+    </div>
+    <div class="param">
+      <label for="inT">Time horizon T</label>
+      <input id="inT" type="number" min="0.1" max="100" step="0.1" value="1" disabled>
+    </div>
+  </div>
+
   <div class="controls">
-    <button class="primary" id="btnToss">Toss the coin ×6</button>
+    <button class="primary" id="btnToss">Toss the coin</button>
     <button id="btnReset">Clear</button>
     <button id="btnGhost">Keep paths</button>
   </div>
   <div class="chart-zone">
-    <svg id="chart" viewBox="0 0 760 420" role="img" aria-label="Random walk path over six coin tosses"></svg>
+    <svg id="chart" viewBox="0 0 760 420" role="img" aria-label="Random walk path"></svg>
   </div>
   <div class="tosses" id="tossRow" aria-live="polite"></div>
-  <div class="result-line" id="resultLine">Click “Toss the coin ×6” to run the experiment.</div>
+  <div class="result-line" id="resultLine">Choose your parameters, then click “Toss the coin”.</div>
 </div>
 
 </div>
 
 <script>
 (function(){
-  const N = 6;
   const svg = document.getElementById('chart');
   const tossRow = document.getElementById('tossRow');
   const resultLine = document.getElementById('resultLine');
   const btnToss = document.getElementById('btnToss');
   const btnReset = document.getElementById('btnReset');
   const btnGhost = document.getElementById('btnGhost');
-  let keepGhosts = false;
-  let ghosts = [];
+  const inN = document.getElementById('inN');
+  const inT = document.getElementById('inT');
+  const modeUnit = document.getElementById('modeUnit');
+  const modeSqrt = document.getElementById('modeSqrt');
 
-  const W=760,H=420,mL=54,mR=24,mT=24,mB=44;
-  const x = i => mL + i*(W-mL-mR)/N;
-  const yMax = 6;
-  const y = v => mT + (yMax - v)*(H-mT-mB)/(2*yMax);
+  let mode = 'unit';           // 'unit' => ±1, 'sqrt' => ±sqrt(T/n)
+  let keepGhosts = false;
+  let ghosts = [];             // {S:[...], n, T, mode}
+
+  const W=760,H=420,mL=64,mR=24,mT=24,mB=44;
+
+  function params(){
+    let n = Math.max(1, Math.min(5000, Math.round(+inN.value || 6)));
+    inN.value = n;
+    let T = Math.max(0.1, +inT.value || 1);
+    inT.value = T;
+    const step = mode==='unit' ? 1 : Math.sqrt(T/n);
+    return {n, T, step};
+  }
+
+  // y-range: cover ±3 standard deviations of S_n (and at least ±3 steps)
+  function yRange(n, step){
+    const sd = step*Math.sqrt(n);
+    return Math.max(3*sd, 3*step);
+  }
 
   const NS='http://www.w3.org/2000/svg';
   const el=(t,a)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e};
 
-  function drawBase(){
+  function niceTick(range){
+    const raw = range/4;
+    const pow = Math.pow(10, Math.floor(Math.log10(raw)));
+    const m = raw/pow;
+    const nice = m<1.5?1:(m<3?2:(m<7?5:10));
+    return nice*pow;
+  }
+  function fmt(v){
+    const a=Math.abs(v);
+    const s = a>=100?a.toFixed(0):(a>=1?a.toFixed(a%1?1:0):a.toFixed(2));
+    return (v>0?'+$':v<0?'−$':'$')+s.replace(/\.0+$/,'');
+  }
+
+  function drawBase(n, yMax){
     svg.innerHTML='';
-    for(let v=-yMax;v<=yMax;v+=1){
-      svg.appendChild(el('line',{x1:mL,x2:W-mR,y1:y(v),y2:y(v),stroke:v===0?'#3a4a6e':'#1c2740','stroke-width':v===0?1.5:1}));
-      const t=el('text',{x:mL-10,y:y(v)+4,'text-anchor':'end',fill:'#9aa3b5','font-size':'11','font-family':'IBM Plex Mono, monospace'});
-      t.textContent=(v>0?'+':'')+'$'+Math.abs(v)*(v<0?-1:1);
-      t.textContent=(v>0?'+$'+v:(v<0?'−$'+Math.abs(v):'$0'));
+    const x = i => mL + i*(W-mL-mR)/n;
+    const y = v => mT + (yMax - v)*(H-mT-mB)/(2*yMax);
+    // horizontal gridlines
+    const tick = niceTick(yMax);
+    for(let v=-Math.floor(yMax/tick)*tick; v<=yMax+1e-9; v+=tick){
+      const vv = Math.abs(v)<1e-12?0:v;
+      svg.appendChild(el('line',{x1:mL,x2:W-mR,y1:y(vv),y2:y(vv),stroke:vv===0?'#3a4a6e':'#1c2740','stroke-width':vv===0?1.5:1}));
+      const t=el('text',{x:mL-10,y:y(vv)+4,'text-anchor':'end',fill:'#9aa3b5','font-size':'11','font-family':'IBM Plex Mono, monospace'});
+      t.textContent=fmt(vv);
       svg.appendChild(t);
     }
-    for(let i=0;i<=N;i++){
+    // vertical ticks (at most ~12 labels)
+    const stepI = Math.max(1, Math.ceil(n/12));
+    for(let i=0;i<=n;i+=stepI){
       svg.appendChild(el('line',{x1:x(i),x2:x(i),y1:mT,y2:H-mB,stroke:'#1c2740'}));
       const t=el('text',{x:x(i),y:H-mB+22,'text-anchor':'middle',fill:'#9aa3b5','font-size':'11','font-family':'IBM Plex Mono, monospace'});
       t.textContent=i===0?'i = 0':i;
       svg.appendChild(t);
     }
-    ghosts.forEach(path=>{
-      svg.appendChild(el('path',{d:pathD(path),fill:'none',stroke:'#9aa3b5','stroke-width':1.2,opacity:.28}));
+    // ghosts (rescaled onto current axes)
+    ghosts.forEach(g=>{
+      const gx = i => mL + i*(W-mL-mR)/g.S.length_1;
+      svg.appendChild(el('path',{d:pathD(g.S, g.S.length-1, yMax),fill:'none',stroke:'#9aa3b5','stroke-width':1,opacity:.28}));
     });
+    return {x,y};
   }
 
-  function pathD(S){
+  function pathD(S, n, yMax){
+    const x = i => mL + i*(W-mL-mR)/n;
+    const y = v => mT + (yMax - v)*(H-mT-mB)/(2*yMax);
     return S.map((v,i)=>(i===0?'M ':'L ')+x(i)+' '+y(v)).join(' ');
   }
 
   function toss(){
+    const {n, T, step} = params();
     btnToss.disabled=true;
     tossRow.innerHTML='';
-    drawBase();
-    const R=[]; const S=[0];
-    for(let i=0;i<N;i++){ const r=Math.random()<0.5?1:-1; R.push(r); S.push(S[i]+r); }
 
-    const path=el('path',{d:pathD(S),fill:'none',stroke:'#e7b03c','stroke-width':2.5,'stroke-linejoin':'round','stroke-linecap':'round'});
+    const yMax = yRange(n, step);
+    const {x,y} = drawBase(n, yMax);
+
+    const R=[]; const S=[0];
+    for(let i=0;i<n;i++){ const r=Math.random()<0.5?1:-1; R.push(r); S.push(S[i]+r*step); }
+
+    const path=el('path',{d:pathD(S,n,yMax),fill:'none',stroke:'#e7b03c','stroke-width':n>200?1.4:2.5,'stroke-linejoin':'round','stroke-linecap':'round'});
     svg.appendChild(path);
     const L=path.getTotalLength();
     const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const animMs = Math.min(1800, 300*n);
     if(!reduced){
       path.style.strokeDasharray=L; path.style.strokeDashoffset=L;
-      path.style.transition='stroke-dashoffset 1.8s ease';
+      path.style.transition='stroke-dashoffset '+(animMs/1000)+'s ease';
       requestAnimationFrame(()=>{path.style.strokeDashoffset=0;});
     }
 
-    S.forEach((v,i)=>{
-      const delay=reduced?0:i*300;
-      setTimeout(()=>{
-        const c=el('circle',{cx:x(i),cy:y(v),r:4.5,fill:i===0?'#e8e4d8':(S[i]>S[i-1]?'#5fc4b8':'#e07a7a'),stroke:'#0e1420','stroke-width':1.5});
-        svg.appendChild(c);
-        if(i>0){
-          const d=document.createElement('div');
-          d.className='coin '+(R[i-1]===1?'H':'T');
-          d.textContent=R[i-1]===1?'H':'T';
-          d.title=R[i-1]===1?'Heads: +$1':'Tails: −$1';
-          tossRow.appendChild(d);
-        }
-        if(i===N){
-          const fin=S[N];
-          const nH=R.filter(r=>r===1).length;
-          resultLine.innerHTML='Sequence: <strong>'+R.map(r=>r===1?'H':'T').join(' · ')+'</strong> &nbsp;—&nbsp; '+nH+' head(s), '+(N-nH)+' tail(s) &nbsp;→&nbsp; final winnings S₆ = <strong>'+(fin>0?'+$'+fin:(fin<0?'−$'+Math.abs(fin):'$0'))+'</strong>';
-          if(keepGhosts) ghosts.push(S);
-          btnToss.disabled=false;
-        }
-      },delay);
-    });
+    // dots + coins only for small n (readable); otherwise just the path
+    const showDetail = n<=20;
+    const perStep = reduced?0:animMs/n;
+    if(showDetail){
+      S.forEach((v,i)=>{
+        setTimeout(()=>{
+          const c=el('circle',{cx:x(i),cy:y(v),r:4.5,fill:i===0?'#e8e4d8':(S[i]>S[i-1]?'#5fc4b8':'#e07a7a'),stroke:'#0e1420','stroke-width':1.5});
+          svg.appendChild(c);
+          if(i>0){
+            const d=document.createElement('div');
+            d.className='coin '+(R[i-1]===1?'H':'T');
+            d.textContent=R[i-1]===1?'H':'T';
+            d.title=R[i-1]===1?'Heads: +'+step.toFixed(4):'Tails: −'+step.toFixed(4);
+            tossRow.appendChild(d);
+          }
+          if(i===n) finish();
+        }, i*perStep);
+      });
+    } else {
+      setTimeout(finish, reduced?0:animMs);
+    }
+
+    function finish(){
+      const fin=S[n];
+      const nH=R.filter(r=>r===1).length;
+      const stakeTxt = mode==='unit' ? '$1' : '√(T/n) = √('+T+'/'+n+') ≈ $'+step.toFixed(4);
+      const varTxt = mode==='unit' ? 'Var(S_n) = n = '+n : 'Var(S_n) = n·(T/n) = T = '+T;
+      resultLine.innerHTML =
+        (showDetail ? 'Sequence: <strong>'+R.map(r=>r===1?'H':'T').join(' · ')+'</strong> &nbsp;—&nbsp; ' : '')
+        + nH+' head(s), '+(n-nH)+' tail(s) &nbsp;·&nbsp; stake '+stakeTxt
+        + ' &nbsp;→&nbsp; final winnings S<sub>n</sub> = <strong>'+fmt(fin)+'</strong>'
+        + ' &nbsp;·&nbsp; '+varTxt;
+      if(keepGhosts) ghosts.push({S:S.slice()});
+      btnToss.disabled=false;
+    }
   }
 
+  modeUnit.addEventListener('click',()=>{mode='unit';modeUnit.classList.add('active');modeSqrt.classList.remove('active');inT.disabled=true;});
+  modeSqrt.addEventListener('click',()=>{mode='sqrt';modeSqrt.classList.add('active');modeUnit.classList.remove('active');inT.disabled=false;});
+
   btnToss.addEventListener('click',toss);
-  btnReset.addEventListener('click',()=>{ghosts=[];tossRow.innerHTML='';resultLine.textContent='Click “Toss the coin ×6” to run the experiment.';drawBase();});
+  btnReset.addEventListener('click',()=>{
+    ghosts=[];tossRow.innerHTML='';
+    resultLine.textContent='Choose your parameters, then click “Toss the coin”.';
+    const {n, step}=params(); drawBase(n, yRange(n, step));
+  });
   btnGhost.addEventListener('click',()=>{keepGhosts=!keepGhosts;btnGhost.textContent=keepGhosts?'✓ Keeping paths':'Keep paths';});
 
-  drawBase();
+  const {n, step}=params(); drawBase(n, yRange(n, step));
 })();
 </script>
 </body>
