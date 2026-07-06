@@ -73,6 +73,7 @@ p.lead{font-size:20px;color:var(--ink)}
   text-transform:uppercase;color:var(--amber);
 }
 .exp-bar .label.blue{color:var(--blue)}
+.exp-bar .label.teal{color:var(--teal)}
 .exp-bar .fig{font-family:'Fraunces',serif;font-style:italic;font-size:15px;color:var(--ink-dim)}
 
 .params{
@@ -100,7 +101,7 @@ p.lead{font-size:20px;color:var(--ink)}
 .seg button.active{background:var(--amber);color:#0e1420;font-weight:500}
 .seg button:not(.active):hover{color:var(--amber)}
 
-.controls{display:flex;gap:10px;flex-wrap:wrap;padding:16px 24px 0}
+.controls{display:flex;gap:10px;flex-wrap:wrap;padding:16px 24px 0;align-items:center}
 button{
   font-family:'IBM Plex Mono',monospace;font-size:13px;letter-spacing:.05em;
   padding:10px 18px;border-radius:6px;cursor:pointer;
@@ -113,7 +114,10 @@ button.primary{background:var(--amber);border-color:var(--amber);color:#0e1420;f
 button.primary:hover{background:#f2c25a;color:#0e1420}
 button.primary.blue{background:var(--blue);border-color:var(--blue)}
 button.primary.blue:hover{background:#8cbcff}
+button.primary.teal{background:var(--teal);border-color:var(--teal)}
+button.primary.teal:hover{background:#7fd6cb}
 button.blue:not(.primary):hover{border-color:var(--blue);color:var(--blue)}
+button.teal:not(.primary):hover{border-color:var(--teal);color:var(--teal)}
 button:disabled{opacity:.45;cursor:default}
 .chart-zone{padding:10px 24px 6px}
 svg{display:block;width:100%;height:auto}
@@ -132,6 +136,15 @@ canvas{display:block;width:100%;height:auto;border-radius:6px}
 }
 .result-line strong{color:var(--amber);font-weight:500}
 .result-line strong.blue{color:var(--blue)}
+
+.legend{
+  display:flex;gap:26px;flex-wrap:wrap;padding:14px 24px 0;
+  font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--ink-dim);
+}
+.legend .item{display:flex;align-items:center;gap:9px;cursor:pointer;user-select:none;transition:opacity .15s}
+.legend .item.off{opacity:.32}
+.legend .swatch{width:22px;height:3px;border-radius:2px}
+.legend .item .eq{color:var(--ink-dim);font-size:11.5px;margin-left:2px}
 
 @media (max-width:640px){.ch-num{font-size:64px}}
 @media (prefers-reduced-motion:reduce){.coin{animation:none}*{transition:none !important}}
@@ -218,6 +231,33 @@ canvas{display:block;width:100%;height:auto;border-radius:6px}
     <canvas id="bm" width="1520" height="840" aria-label="Animated two-dimensional Brownian motion of a particle"></canvas>
   </div>
   <div class="result-line" id="bmLine">The particle starts at the origin. Press “Release the particle”.</div>
+</div>
+
+<section style="padding-top:56px">
+  <p class="lead">The same Brownian engine <span class="math">dX</span> drives every model in this book — what changes is the <strong>drift and how the noise enters</strong>. Three canonical processes, one shared source of randomness: the arithmetic <strong>random walk</strong> (can go anywhere, even negative), the <strong>lognormal walk</strong> of stock prices (noise proportional to the level, always positive), and the <strong>mean-reverting Vasicek walk</strong> of interest rates (pulled back toward its long-run level θ like a spring).</p>
+</section>
+
+<div class="experiment">
+  <div class="exp-bar">
+    <span class="label teal">Experiment 1.3 — Three walks, one noise</span>
+    <span class="fig">Fig. 1.3 — arithmetic · lognormal · mean-reverting</span>
+  </div>
+
+  <div class="controls">
+    <button class="primary teal" id="twSim">Simulate</button>
+    <button class="teal" id="twSameNoise">✓ Same noise for all three</button>
+  </div>
+
+  <div class="legend" id="twLegend">
+    <div class="item" data-k="rw"><span class="swatch" style="background:#e7b03c"></span>Random walk <span class="eq">dX = σ dW</span></div>
+    <div class="item" data-k="gbm"><span class="swatch" style="background:#6aa8ff"></span>Lognormal walk <span class="eq">dS = μS dt + σS dW</span></div>
+    <div class="item" data-k="vas"><span class="swatch" style="background:#5fc4b8"></span>Vasicek <span class="eq">dr = κ(θ − r) dt + σ dW</span></div>
+  </div>
+
+  <div class="chart-zone">
+    <svg id="tw" viewBox="0 0 760 430" role="img" aria-label="Three stochastic processes on one chart"></svg>
+  </div>
+  <div class="result-line" id="twLine">Press “Simulate”. Click a legend entry to show or hide a curve.</div>
 </div>
 
 </div>
@@ -382,16 +422,15 @@ canvas{display:block;width:100%;height:auto;border-radius:6px}
   const line = document.getElementById('bmLine');
   const spSlow=document.getElementById('spSlow'), spMed=document.getElementById('spMed'), spFast=document.getElementById('spFast');
 
-  const W = cv.width, H = cv.height;      // 1520 x 840 (retina-ish)
+  const W = cv.width, H = cv.height;
   const cx0 = W/2, cy0 = H/2;
   let running = false;
   let raf = null;
-  let speed = 3;                           // sub-steps per frame
+  let speed = 3;
   let px, py, t, trail;
-  const sigma = 5.2;                       // pixel std-dev per sub-step
+  const sigma = 5.2;
   const MAXTRAIL = 4200;
 
-  // gaussian via Box–Muller
   function gauss(){
     let u=0,v=0;
     while(u===0)u=Math.random();
@@ -409,7 +448,6 @@ canvas{display:block;width:100%;height:auto;border-radius:6px}
   }
 
   function paintBackdrop(){
-    // deep vignette
     ctx.fillStyle='#0b101c';
     ctx.fillRect(0,0,W,H);
     const g=ctx.createRadialGradient(cx0,cy0,60,cx0,cy0,Math.max(W,H)*.62);
@@ -417,22 +455,19 @@ canvas{display:block;width:100%;height:auto;border-radius:6px}
     g.addColorStop(1,'rgba(11,16,28,0)');
     ctx.fillStyle=g;
     ctx.fillRect(0,0,W,H);
-    // faint grid
     ctx.strokeStyle='rgba(38,50,76,.5)';
     ctx.lineWidth=1;
     for(let x=0;x<=W;x+=96){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
     for(let y=0;y<=H;y+=96){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
-    // origin cross
     ctx.strokeStyle='rgba(154,163,181,.5)';
     ctx.beginPath();ctx.moveTo(cx0-14,cy0);ctx.lineTo(cx0+14,cy0);ctx.moveTo(cx0,cy0-14);ctx.lineTo(cx0,cy0+14);ctx.stroke();
   }
 
   function paintTrail(){
-    // trail drawn in segments with fading alpha + glow on recent part
     const n=trail.length;
     if(n<2)return;
     for(let i=1;i<n;i++){
-      const age=(n-i)/n;                       // 0 = newest, 1 = oldest
+      const age=(n-i)/n;
       const alpha=Math.max(0.04, 0.9*(1-age));
       ctx.strokeStyle='rgba(106,168,255,'+alpha.toFixed(3)+')';
       ctx.lineWidth = 1.1 + 1.6*(1-age);
@@ -441,7 +476,6 @@ canvas{display:block;width:100%;height:auto;border-radius:6px}
       ctx.lineTo(trail[i][0],trail[i][1]);
       ctx.stroke();
     }
-    // luminous head
     const g=ctx.createRadialGradient(px,py,0,px,py,26);
     g.addColorStop(0,'rgba(170,205,255,0.95)');
     g.addColorStop(0.25,'rgba(106,168,255,0.55)');
@@ -462,7 +496,6 @@ canvas{display:block;width:100%;height:auto;border-radius:6px}
     for(let k=0;k<speed;k++){
       px+=sigma*gauss();
       py+=sigma*gauss();
-      // soft reflecting walls so the particle stays visible
       if(px<12){px=24-px;} if(px>W-12){px=2*(W-12)-px;}
       if(py<12){py=24-py;} if(py>H-12){py=2*(H-12)-py;}
       trail.push([px,py]);
@@ -488,6 +521,138 @@ canvas{display:block;width:100%;height:auto;border-radius:6px}
   spFast.addEventListener('click',()=>setSpeed(9,spFast));
 
   reset();
+})();
+
+/* ---------------- Experiment 1.3 : three walks, one noise ---------------- */
+(function(){
+  const svg = document.getElementById('tw');
+  const btnSim = document.getElementById('twSim');
+  const btnSame = document.getElementById('twSameNoise');
+  const line = document.getElementById('twLine');
+  const legend = document.getElementById('twLegend');
+
+  const W=760,H=430,mL=64,mR=24,mT=20,mB=44;
+  const N=500, T=1, dt=T/N;
+
+  // model params (all start at X0 = 100 to share one chart)
+  const X0=100;
+  const P = {
+    rw:  {sigma: 20},                          // dX = sigma dW
+    gbm: {mu: 0.08, sigma: 0.20},              // dS = mu S dt + sigma S dW
+    vas: {kappa: 6, theta: 100, sigma: 20}     // dr = kappa(theta - r)dt + sigma dW
+  };
+  const COLORS = {rw:'#e7b03c', gbm:'#6aa8ff', vas:'#5fc4b8'};
+  const NAMES  = {rw:'Random walk', gbm:'Lognormal', vas:'Vasicek'};
+
+  let sameNoise = true;
+  const visible = {rw:true, gbm:true, vas:true};
+  let paths = null;
+
+  function gauss(){
+    let u=0,v=0;
+    while(u===0)u=Math.random();
+    while(v===0)v=Math.random();
+    return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+  }
+
+  function simulate(){
+    const Zs = [];
+    for(let i=0;i<N;i++) Zs.push(gauss());
+    const Z = k => sameNoise ? Zs : Array.from({length:N}, gauss);
+
+    const zRW  = sameNoise ? Zs : Array.from({length:N},()=>gauss());
+    const zGBM = sameNoise ? Zs : Array.from({length:N},()=>gauss());
+    const zVAS = sameNoise ? Zs : Array.from({length:N},()=>gauss());
+
+    const rw=[X0], gbm=[X0], vas=[X0];
+    for(let i=0;i<N;i++){
+      const sdt=Math.sqrt(dt);
+      rw.push( rw[i] + P.rw.sigma*sdt*zRW[i] );
+      gbm.push( gbm[i]*Math.exp((P.gbm.mu-0.5*P.gbm.sigma*P.gbm.sigma)*dt + P.gbm.sigma*sdt*zGBM[i]) );
+      vas.push( vas[i] + P.vas.kappa*(P.vas.theta - vas[i])*dt + P.vas.sigma*sdt*zVAS[i] );
+    }
+    paths = {rw, gbm, vas};
+    draw();
+    line.innerHTML =
+      'X₀ = 100 &nbsp;·&nbsp; final values — '
+      +'<strong>RW '+rw[N].toFixed(1)+'</strong> · '
+      +'<strong style="color:#6aa8ff">GBM '+gbm[N].toFixed(1)+'</strong> · '
+      +'<strong style="color:#5fc4b8">Vasicek '+vas[N].toFixed(1)+'</strong>'
+      +' &nbsp;·&nbsp; note how Vasicek hugs θ = 100 while the other two wander'
+      +(sameNoise?' — same dW driving all three.':' — independent noises.');
+  }
+
+  const NS='http://www.w3.org/2000/svg';
+  const el=(t,a)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e};
+
+  function niceTick(range){
+    const raw = range/5;
+    const pow = Math.pow(10, Math.floor(Math.log10(raw)));
+    const m = raw/pow;
+    return (m<1.5?1:(m<3?2:(m<7?5:10)))*pow;
+  }
+
+  function draw(){
+    svg.innerHTML='';
+    if(!paths)return;
+    // y-range from visible paths
+    let lo=Infinity, hi=-Infinity;
+    ['rw','gbm','vas'].forEach(k=>{
+      if(!visible[k])return;
+      paths[k].forEach(v=>{if(v<lo)lo=v;if(v>hi)hi=v;});
+    });
+    if(!isFinite(lo)){lo=0;hi=200;}
+    const pad=(hi-lo)*0.08||10; lo-=pad; hi+=pad;
+
+    const x = i => mL + i*(W-mL-mR)/N;
+    const y = v => mT + (hi - v)*(H-mT-mB)/(hi-lo);
+
+    const tick=niceTick(hi-lo);
+    for(let v=Math.ceil(lo/tick)*tick; v<=hi; v+=tick){
+      svg.appendChild(el('line',{x1:mL,x2:W-mR,y1:y(v),y2:y(v),stroke:'#1c2740'}));
+      const t=el('text',{x:mL-10,y:y(v)+4,'text-anchor':'end',fill:'#9aa3b5','font-size':'11','font-family':'IBM Plex Mono, monospace'});
+      t.textContent=v.toFixed(0);
+      svg.appendChild(t);
+    }
+    // theta line
+    if(visible.vas && P.vas.theta>lo && P.vas.theta<hi){
+      svg.appendChild(el('line',{x1:mL,x2:W-mR,y1:y(P.vas.theta),y2:y(P.vas.theta),stroke:'#5fc4b8','stroke-width':1,'stroke-dasharray':'5 6',opacity:.55}));
+      const t=el('text',{x:W-mR-4,y:y(P.vas.theta)-6,'text-anchor':'end',fill:'#5fc4b8','font-size':'11','font-family':'IBM Plex Mono, monospace',opacity:.8});
+      t.textContent='θ = '+P.vas.theta;
+      svg.appendChild(t);
+    }
+    // x-axis time labels 0 .. T
+    for(let f=0;f<=1;f+=0.25){
+      const i=Math.round(f*N);
+      svg.appendChild(el('line',{x1:x(i),x2:x(i),y1:mT,y2:H-mB,stroke:'#1c2740'}));
+      const t=el('text',{x:x(i),y:H-mB+22,'text-anchor':'middle',fill:'#9aa3b5','font-size':'11','font-family':'IBM Plex Mono, monospace'});
+      t.textContent='t = '+(f*T).toFixed(2);
+      svg.appendChild(t);
+    }
+
+    ['vas','gbm','rw'].forEach(k=>{
+      if(!visible[k])return;
+      const d=paths[k].map((v,i)=>(i===0?'M ':'L ')+x(i)+' '+y(v)).join(' ');
+      svg.appendChild(el('path',{d,fill:'none',stroke:COLORS[k],'stroke-width':1.8,'stroke-linejoin':'round',opacity:.95}));
+    });
+  }
+
+  legend.querySelectorAll('.item').forEach(it=>{
+    it.addEventListener('click',()=>{
+      const k=it.dataset.k;
+      visible[k]=!visible[k];
+      it.classList.toggle('off',!visible[k]);
+      draw();
+    });
+  });
+
+  btnSim.addEventListener('click',simulate);
+  btnSame.addEventListener('click',()=>{
+    sameNoise=!sameNoise;
+    btnSame.textContent=(sameNoise?'✓ ':'')+'Same noise for all three';
+  });
+
+  simulate();
 })();
 </script>
 </body>
