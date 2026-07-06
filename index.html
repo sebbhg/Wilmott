@@ -16,6 +16,7 @@
   --amber:#e7b03c;
   --teal:#5fc4b8;
   --rose:#e07a7a;
+  --blue:#6aa8ff;
   --rule:#26324c;
 }
 *{margin:0;padding:0;box-sizing:border-box}
@@ -71,6 +72,7 @@ p.lead{font-size:20px;color:var(--ink)}
   font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.18em;
   text-transform:uppercase;color:var(--amber);
 }
+.exp-bar .label.blue{color:var(--blue)}
 .exp-bar .fig{font-family:'Fraunces',serif;font-style:italic;font-size:15px;color:var(--ink-dim)}
 
 .params{
@@ -89,9 +91,7 @@ p.lead{font-size:20px;color:var(--ink)}
 }
 .param input[type=number]:focus{outline:none;border-color:var(--amber)}
 .param input:disabled{opacity:.4}
-.seg{
-  display:flex;border:1px solid var(--rule);border-radius:6px;overflow:hidden;
-}
+.seg{display:flex;border:1px solid var(--rule);border-radius:6px;overflow:hidden}
 .seg button{
   font-family:'IBM Plex Mono',monospace;font-size:12.5px;padding:9px 14px;
   background:transparent;border:none;color:var(--ink-dim);cursor:pointer;
@@ -111,9 +111,13 @@ button:hover{border-color:var(--amber);color:var(--amber)}
 button:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
 button.primary{background:var(--amber);border-color:var(--amber);color:#0e1420;font-weight:500}
 button.primary:hover{background:#f2c25a;color:#0e1420}
+button.primary.blue{background:var(--blue);border-color:var(--blue)}
+button.primary.blue:hover{background:#8cbcff}
+button.blue:not(.primary):hover{border-color:var(--blue);color:var(--blue)}
 button:disabled{opacity:.45;cursor:default}
 .chart-zone{padding:10px 24px 6px}
 svg{display:block;width:100%;height:auto}
+canvas{display:block;width:100%;height:auto;border-radius:6px}
 .tosses{display:flex;gap:10px;padding:6px 24px 4px;align-items:center;flex-wrap:wrap;min-height:34px}
 .coin{
   width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;
@@ -127,6 +131,7 @@ svg{display:block;width:100%;height:auto}
   padding:12px 24px 22px;font-family:'IBM Plex Mono',monospace;font-size:14px;color:var(--ink-dim);
 }
 .result-line strong{color:var(--amber);font-weight:500}
+.result-line strong.blue{color:var(--blue)}
 
 @media (max-width:640px){.ch-num{font-size:64px}}
 @media (prefers-reduced-motion:reduce){.coin{animation:none}*{transition:none !important}}
@@ -163,7 +168,7 @@ svg{display:block;width:100%;height:auto}
   <div class="params">
     <div class="param">
       <label for="inN">Number of tosses n</label>
-      <input id="inN" type="number" min="1" max="5000" step="1" value="6">
+      <input id="inN" type="number" min="1" max="100000" step="1" value="6">
     </div>
     <div class="param">
       <label>Stake per toss</label>
@@ -190,9 +195,35 @@ svg{display:block;width:100%;height:auto}
   <div class="result-line" id="resultLine">Choose your parameters, then click “Toss the coin”.</div>
 </div>
 
+<section style="padding-top:56px">
+  <p class="lead">In 1827 the botanist Robert Brown watched pollen grains jiggle erratically in water — battered from every direction by invisible molecules. This is <strong>Brownian motion</strong>: the continuous-time limit of our coin-tossing walk. Below, a particle wanders in the plane; each coordinate is an independent Brownian motion, and its trace is the blue thread of pure randomness.</p>
+</section>
+
+<div class="experiment">
+  <div class="exp-bar">
+    <span class="label blue">Experiment 1.2 — The Brownian particle</span>
+    <span class="fig">Fig. 1.2 — a particle under molecular bombardment</span>
+  </div>
+
+  <div class="controls">
+    <button class="primary blue" id="bmToggle">Release the particle</button>
+    <button class="blue" id="bmReset">Reset</button>
+    <div class="seg" style="margin-left:auto">
+      <button id="spSlow" type="button">Slow</button>
+      <button id="spMed" class="active" type="button">Normal</button>
+      <button id="spFast" type="button">Fast</button>
+    </div>
+  </div>
+  <div class="chart-zone">
+    <canvas id="bm" width="1520" height="840" aria-label="Animated two-dimensional Brownian motion of a particle"></canvas>
+  </div>
+  <div class="result-line" id="bmLine">The particle starts at the origin. Press “Release the particle”.</div>
+</div>
+
 </div>
 
 <script>
+/* ---------------- Experiment 1.1 : coin-tossing walk ---------------- */
 (function(){
   const svg = document.getElementById('chart');
   const tossRow = document.getElementById('tossRow');
@@ -205,22 +236,20 @@ svg{display:block;width:100%;height:auto}
   const modeUnit = document.getElementById('modeUnit');
   const modeSqrt = document.getElementById('modeSqrt');
 
-  let mode = 'unit';           // 'unit' => ±1, 'sqrt' => ±sqrt(T/n)
+  let mode = 'unit';
   let keepGhosts = false;
-  let ghosts = [];             // {S:[...], n, T, mode}
+  let ghosts = [];
 
   const W=760,H=420,mL=64,mR=24,mT=24,mB=44;
 
   function params(){
-    let n = Math.max(1, Math.min(5000, Math.round(+inN.value || 6)));
+    let n = Math.max(1, Math.min(100000, Math.round(+inN.value || 6)));
     inN.value = n;
     let T = Math.max(0.1, +inT.value || 1);
     inT.value = T;
     const step = mode==='unit' ? 1 : Math.sqrt(T/n);
     return {n, T, step};
   }
-
-  // y-range: cover ±3 standard deviations of S_n (and at least ±3 steps)
   function yRange(n, step){
     const sd = step*Math.sqrt(n);
     return Math.max(3*sd, 3*step);
@@ -246,7 +275,6 @@ svg{display:block;width:100%;height:auto}
     svg.innerHTML='';
     const x = i => mL + i*(W-mL-mR)/n;
     const y = v => mT + (yMax - v)*(H-mT-mB)/(2*yMax);
-    // horizontal gridlines
     const tick = niceTick(yMax);
     for(let v=-Math.floor(yMax/tick)*tick; v<=yMax+1e-9; v+=tick){
       const vv = Math.abs(v)<1e-12?0:v;
@@ -255,7 +283,6 @@ svg{display:block;width:100%;height:auto}
       t.textContent=fmt(vv);
       svg.appendChild(t);
     }
-    // vertical ticks (at most ~12 labels)
     const stepI = Math.max(1, Math.ceil(n/12));
     for(let i=0;i<=n;i+=stepI){
       svg.appendChild(el('line',{x1:x(i),x2:x(i),y1:mT,y2:H-mB,stroke:'#1c2740'}));
@@ -263,9 +290,7 @@ svg{display:block;width:100%;height:auto}
       t.textContent=i===0?'i = 0':i;
       svg.appendChild(t);
     }
-    // ghosts (rescaled onto current axes)
     ghosts.forEach(g=>{
-      const gx = i => mL + i*(W-mL-mR)/g.S.length_1;
       svg.appendChild(el('path',{d:pathD(g.S, g.S.length-1, yMax),fill:'none',stroke:'#9aa3b5','stroke-width':1,opacity:.28}));
     });
     return {x,y};
@@ -288,7 +313,7 @@ svg{display:block;width:100%;height:auto}
     const R=[]; const S=[0];
     for(let i=0;i<n;i++){ const r=Math.random()<0.5?1:-1; R.push(r); S.push(S[i]+r*step); }
 
-    const path=el('path',{d:pathD(S,n,yMax),fill:'none',stroke:'#e7b03c','stroke-width':n>200?1.4:2.5,'stroke-linejoin':'round','stroke-linecap':'round'});
+    const path=el('path',{d:pathD(S,n,yMax),fill:'none',stroke:'#e7b03c','stroke-width':n>200?1.2:2.5,'stroke-linejoin':'round','stroke-linecap':'round'});
     svg.appendChild(path);
     const L=path.getTotalLength();
     const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -299,7 +324,6 @@ svg{display:block;width:100%;height:auto}
       requestAnimationFrame(()=>{path.style.strokeDashoffset=0;});
     }
 
-    // dots + coins only for small n (readable); otherwise just the path
     const showDetail = n<=20;
     const perStep = reduced?0:animMs/n;
     if(showDetail){
@@ -311,7 +335,6 @@ svg{display:block;width:100%;height:auto}
             const d=document.createElement('div');
             d.className='coin '+(R[i-1]===1?'H':'T');
             d.textContent=R[i-1]===1?'H':'T';
-            d.title=R[i-1]===1?'Heads: +'+step.toFixed(4):'Tails: −'+step.toFixed(4);
             tossRow.appendChild(d);
           }
           if(i===n) finish();
@@ -324,12 +347,12 @@ svg{display:block;width:100%;height:auto}
     function finish(){
       const fin=S[n];
       const nH=R.filter(r=>r===1).length;
-      const stakeTxt = mode==='unit' ? '$1' : '√(T/n) = √('+T+'/'+n+') ≈ $'+step.toFixed(4);
-      const varTxt = mode==='unit' ? 'Var(S_n) = n = '+n : 'Var(S_n) = n·(T/n) = T = '+T;
+      const stakeTxt = mode==='unit' ? '$1' : '√(T/n) ≈ $'+step.toFixed(4);
+      const varTxt = mode==='unit' ? 'Var(S_n) = n = '+n : 'Var(S_n) = T = '+T;
       resultLine.innerHTML =
         (showDetail ? 'Sequence: <strong>'+R.map(r=>r===1?'H':'T').join(' · ')+'</strong> &nbsp;—&nbsp; ' : '')
         + nH+' head(s), '+(n-nH)+' tail(s) &nbsp;·&nbsp; stake '+stakeTxt
-        + ' &nbsp;→&nbsp; final winnings S<sub>n</sub> = <strong>'+fmt(fin)+'</strong>'
+        + ' &nbsp;→&nbsp; S<sub>n</sub> = <strong>'+fmt(fin)+'</strong>'
         + ' &nbsp;·&nbsp; '+varTxt;
       if(keepGhosts) ghosts.push({S:S.slice()});
       btnToss.disabled=false;
@@ -348,6 +371,123 @@ svg{display:block;width:100%;height:auto}
   btnGhost.addEventListener('click',()=>{keepGhosts=!keepGhosts;btnGhost.textContent=keepGhosts?'✓ Keeping paths':'Keep paths';});
 
   const {n, step}=params(); drawBase(n, yRange(n, step));
+})();
+
+/* ---------------- Experiment 1.2 : Brownian particle ---------------- */
+(function(){
+  const cv = document.getElementById('bm');
+  const ctx = cv.getContext('2d');
+  const btn = document.getElementById('bmToggle');
+  const btnReset = document.getElementById('bmReset');
+  const line = document.getElementById('bmLine');
+  const spSlow=document.getElementById('spSlow'), spMed=document.getElementById('spMed'), spFast=document.getElementById('spFast');
+
+  const W = cv.width, H = cv.height;      // 1520 x 840 (retina-ish)
+  const cx0 = W/2, cy0 = H/2;
+  let running = false;
+  let raf = null;
+  let speed = 3;                           // sub-steps per frame
+  let px, py, t, trail;
+  const sigma = 5.2;                       // pixel std-dev per sub-step
+  const MAXTRAIL = 4200;
+
+  // gaussian via Box–Muller
+  function gauss(){
+    let u=0,v=0;
+    while(u===0)u=Math.random();
+    while(v===0)v=Math.random();
+    return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+  }
+
+  function reset(){
+    running=false;
+    if(raf)cancelAnimationFrame(raf);
+    btn.textContent='Release the particle';
+    px=cx0; py=cy0; t=0; trail=[[px,py]];
+    line.innerHTML='The particle starts at the origin. Press “Release the particle”.';
+    paintStatic();
+  }
+
+  function paintBackdrop(){
+    // deep vignette
+    ctx.fillStyle='#0b101c';
+    ctx.fillRect(0,0,W,H);
+    const g=ctx.createRadialGradient(cx0,cy0,60,cx0,cy0,Math.max(W,H)*.62);
+    g.addColorStop(0,'rgba(106,168,255,0.055)');
+    g.addColorStop(1,'rgba(11,16,28,0)');
+    ctx.fillStyle=g;
+    ctx.fillRect(0,0,W,H);
+    // faint grid
+    ctx.strokeStyle='rgba(38,50,76,.5)';
+    ctx.lineWidth=1;
+    for(let x=0;x<=W;x+=96){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+    for(let y=0;y<=H;y+=96){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+    // origin cross
+    ctx.strokeStyle='rgba(154,163,181,.5)';
+    ctx.beginPath();ctx.moveTo(cx0-14,cy0);ctx.lineTo(cx0+14,cy0);ctx.moveTo(cx0,cy0-14);ctx.lineTo(cx0,cy0+14);ctx.stroke();
+  }
+
+  function paintTrail(){
+    // trail drawn in segments with fading alpha + glow on recent part
+    const n=trail.length;
+    if(n<2)return;
+    for(let i=1;i<n;i++){
+      const age=(n-i)/n;                       // 0 = newest, 1 = oldest
+      const alpha=Math.max(0.04, 0.9*(1-age));
+      ctx.strokeStyle='rgba(106,168,255,'+alpha.toFixed(3)+')';
+      ctx.lineWidth = 1.1 + 1.6*(1-age);
+      ctx.beginPath();
+      ctx.moveTo(trail[i-1][0],trail[i-1][1]);
+      ctx.lineTo(trail[i][0],trail[i][1]);
+      ctx.stroke();
+    }
+    // luminous head
+    const g=ctx.createRadialGradient(px,py,0,px,py,26);
+    g.addColorStop(0,'rgba(170,205,255,0.95)');
+    g.addColorStop(0.25,'rgba(106,168,255,0.55)');
+    g.addColorStop(1,'rgba(106,168,255,0)');
+    ctx.fillStyle=g;
+    ctx.beginPath();ctx.arc(px,py,26,0,2*Math.PI);ctx.fill();
+    ctx.fillStyle='#eaf2ff';
+    ctx.beginPath();ctx.arc(px,py,4.2,0,2*Math.PI);ctx.fill();
+  }
+
+  function paintStatic(){
+    paintBackdrop();
+    paintTrail();
+  }
+
+  function frame(){
+    if(!running)return;
+    for(let k=0;k<speed;k++){
+      px+=sigma*gauss();
+      py+=sigma*gauss();
+      // soft reflecting walls so the particle stays visible
+      if(px<12){px=24-px;} if(px>W-12){px=2*(W-12)-px;}
+      if(py<12){py=24-py;} if(py>H-12){py=2*(H-12)-py;}
+      trail.push([px,py]);
+      if(trail.length>MAXTRAIL)trail.shift();
+      t++;
+    }
+    paintStatic();
+    const dx=(px-cx0), dy=(py-cy0);
+    const dist=Math.sqrt(dx*dx+dy*dy);
+    line.innerHTML='t = <strong class="blue">'+t+'</strong> steps &nbsp;·&nbsp; distance from origin ≈ <strong class="blue">'+dist.toFixed(0)+'</strong> px &nbsp;·&nbsp; typical displacement grows like <strong class="blue">√t</strong>, not t — the particle drifts nowhere, yet never rests.';
+    raf=requestAnimationFrame(frame);
+  }
+
+  btn.addEventListener('click',()=>{
+    running=!running;
+    btn.textContent=running?'Pause':'Resume';
+    if(running)raf=requestAnimationFrame(frame);
+  });
+  btnReset.addEventListener('click',reset);
+  function setSpeed(s,el){speed=s;[spSlow,spMed,spFast].forEach(b=>b.classList.remove('active'));el.classList.add('active');}
+  spSlow.addEventListener('click',()=>setSpeed(1,spSlow));
+  spMed.addEventListener('click',()=>setSpeed(3,spMed));
+  spFast.addEventListener('click',()=>setSpeed(9,spFast));
+
+  reset();
 })();
 </script>
 </body>
